@@ -10,21 +10,27 @@
 @import JavaScriptCore;
 #import "TFHpple.h"
 #import "YoutubePlayerViewController.h"
+#import "RMNetworkManager.h"
+#import "RMMovieCell.h"
+#import "TFHppleElement+RMMovie.h"
 
 #define urlRedditString @"https://www.reddit.com/r/fullmoviesonyoutube"
 
 @interface ViewController () <UITableViewDelegate, UITableViewDataSource>
 
-@property (strong, nonatomic) IBOutlet UITableView *tableView;
+@property (weak, nonatomic) IBOutlet UITableView *tableView;
+
+@property (nonatomic, strong) NSArray *movies;
 
 @end
 
 @implementation ViewController
 
 - (void)viewDidLoad {
+    
     [super viewDidLoad];
-    TFHpple* redditParser = [TFHpple hppleWithHTMLData:[NSData dataWithContentsOfURL:[NSURL URLWithString:urlRedditString]]];
-    NSMutableArray* titleArray = [NSMutableArray arrayWithArray:[redditParser searchWithXPathQuery:@"//p[@class=\"title\"]"]];
+    
+    [self fetchMovies];
 }
 
 - (BOOL)prefersStatusBarHidden
@@ -34,12 +40,14 @@
 
 -(NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section
 {
-    return 0;
+    return self.movies.count;
 }
 
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath
 {
-    UITableViewCell* cell = [tableView dequeueReusableCellWithIdentifier:@"cell"];
+    RMMovieCell* cell = [tableView dequeueReusableCellWithIdentifier:@"cell" forIndexPath:indexPath];
+    
+    [cell setupWithData:_movies[indexPath.row]];
 
     return cell;
 }
@@ -47,16 +55,39 @@
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath
 {
 
+    [tableView deselectRowAtIndexPath:indexPath animated:NO];
+    TFHppleElement *movie = [self.movies objectAtIndex:indexPath.row];
+    NSString *movieId = [movie movieId];
+    if (movieId) {
+        [self performSegueWithIdentifier:@"vid" sender:movie];
+    }
+    
 }
 
 -(void)prepareForSegue:(UIStoryboardSegue *)segue sender:(id)sender
 {
-    YoutubePlayerViewController* ypvc = (YoutubePlayerViewController*)segue.destinationViewController;
+    if ([segue.identifier isEqualToString:@"vid"]) {
+        TFHppleElement *movie = sender;
+        YoutubePlayerViewController* ypvc = (YoutubePlayerViewController*)segue.destinationViewController;
+        ypvc.ytID = [movie movieId];
+    }
 }
 
 - (void)didReceiveMemoryWarning
 {
     [super didReceiveMemoryWarning];
+}
+
+#pragma mark - Data integration
+
+- (void)fetchMovies {
+    
+    __weak typeof(self) weakSelf = self;
+    
+    [[RMNetworkManager sharedInstance] fetchMoviesWithCompletion:^(NSArray *movies, NSError *error) {
+        weakSelf.movies = movies;
+        [weakSelf.tableView reloadData];
+    }];
 }
 
 @end
